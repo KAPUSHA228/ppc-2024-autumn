@@ -69,104 +69,261 @@ void mySend(boost::mpi::communicator& world, int source_rank, int current_rank, 
   dest_col_pos = dest_rank % cols;
   // std::cout << "zalupa"<< source_rank << current_rank << dest_rank << std::endl;
   if (world.rank() == 0) {
-    std::cout << "input size: " << input_data.size() << std::endl;
-    std::cout << "source_row_pos: " << source_row_pos << std::endl;
-    std::cout << "dest_row_pos: " << dest_row_pos << std::endl;
-    std::cout << "source_col_pos: " << source_col_pos << std::endl;
-    std::cout << "dest_col_pos: " << dest_col_pos << std::endl;
+    std::cout << "input size: " << input_data.size() << std::endl
+              << "source_row_pos: " << source_row_pos << std::endl
+              << "dest_row_pos: " << dest_row_pos << std::endl
+              << "source_col_pos: " << source_col_pos << std::endl
+              << "dest_col_pos: " << dest_col_pos << std::endl;
   }
   std::cout << world.rank() << " current_row_pos: " << current_row_pos << " current_col_pos: " << current_col_pos
             << std::endl;
+  // отключение не нужных рядов/колонок
+  if (source_col_pos == dest_col_pos && current_col_pos != source_col_pos ||
+      // current_col_pos != source_col_pos && current_row_pos != dest_row_pos ||
+      source_row_pos == dest_row_pos && current_row_pos != source_row_pos) {
+    std::cout << world.rank() << " is out1" << std::endl;
+    return;
+  }
+  int delta_row, delta_col;
+  delta_row = dest_row_pos - current_row_pos;
+  delta_col = dest_col_pos - current_col_pos;
+  // отключение отдельных ячеек которые не имеют отношения к передаче
+  int middle_row, middle_col;
+  middle_row = rows % 2 == 0 ? (rows / 2) - (1) : rows / 2;
+  middle_col = cols % 2 == 0 ? (cols / 2) - (1) : cols / 2;
+  std::cout << delta_row << "+" << delta_col << "+" << middle_col << std::endl;
+
+  if (delta_row != 0) {
+    if (abs(source_row_pos - dest_row_pos) <= middle_row) {  // напрямки
+      if (source_row_pos < dest_row_pos) {                   // ниже
+        if ((current_row_pos < source_row_pos || current_row_pos > dest_row_pos)) {
+          std::cout << world.rank() << " is out2" << std::endl;
+          return;
+        }
+      } else {  // выше
+        if ((current_row_pos > source_row_pos || current_row_pos < dest_row_pos)) {
+          std::cout << world.rank() << " is out2" << std::endl;
+          return;
+        }
+      }
+    } else {                                // в обход
+      if (source_row_pos < dest_row_pos) {  // ниже
+        if (current_row_pos > source_row_pos && current_row_pos < dest_row_pos) {
+          std::cout << world.rank() << " is out2" << std::endl;
+          return;
+        }
+      } else {  // выше
+        if (current_row_pos < source_row_pos && current_row_pos > dest_row_pos) {
+          std::cout << world.rank() << " is out2" << std::endl;
+          return;
+        }
+      }
+    }
+  }
+
+  if (abs(source_col_pos - dest_col_pos) <= middle_col) {  // напрямки
+    if (source_col_pos < dest_col_pos) {                   // правее
+      if ((current_col_pos < source_col_pos || current_col_pos > dest_col_pos)) {
+        std::cout << world.rank() << " is out2" << std::endl;
+        return;
+      }
+    } else {  // левее
+      if ((current_col_pos > source_col_pos || current_col_pos < dest_col_pos)) {
+        std::cout << world.rank() << " is out2" << std::endl;
+        return;
+      }
+    }
+  } else {                                // в обход
+    if (source_col_pos < dest_col_pos) {  // правее
+      if ((current_col_pos > source_col_pos && current_col_pos < dest_col_pos)) {
+        std::cout << world.rank() << " is out2" << std::endl;
+        return;
+      }
+    } else {  // левее
+      if ((current_col_pos < source_col_pos && current_col_pos > dest_col_pos)) {
+        std::cout << world.rank() << " is out2" << std::endl;
+        return;
+      }
+    }
+  }
 
   std::vector<int> copy;
   if (source_rank == dest_rank || source_rank < 0 || dest_rank > world.size()) {  // рефлексивность
-    std::cout << "LOX";
-    // world.abort(1);
+    std::cout << "EXIT:REFLEX" << std::endl;
   } else if (current_rank == dest_rank) {  // откуда придёт вызов для последнего
     if (source_col_pos == dest_col_pos) {  // если мы в одной колонке с нужным процессом сразу же
-      if (abs(dest_row_pos - source_row_pos) > (rows / 2)) {
-        source_row_pos < dest_row_pos ? world.recv(neighbors["up"], 0, input_data)
-                                      : world.recv(neighbors["down"], 0, input_data);
-      } else {
-        source_row_pos < dest_row_pos ? world.recv(neighbors["down"], 0, input_data)
-                                      : world.recv(neighbors["up"], 0, input_data);
+      if (abs(dest_row_pos - source_row_pos) > (middle_row)) {  // через края
+        if (source_row_pos < dest_row_pos) {
+          std::cout << "wait from down1" << std::endl;
+          world.recv(neighbors["down"], 0, input_data);
+        } else {
+          std::cout << "wait from up1" << std::endl;
+          world.recv(neighbors["up"], 0, input_data);
+        }
+      } else {  // напрямую
+        if (source_row_pos < dest_row_pos) {
+          std::cout << "wait from up2" << std::endl;
+          world.recv(neighbors["up"], 0, input_data);
+        } else {
+          std::cout << "wait from down2" << std::endl;
+          world.recv(neighbors["down"], 0, input_data);
+        }
       }
-
     } else {  // если не в одной колонке то тоже самое но для колонок
-      if (abs(dest_col_pos) - source_col_pos > (cols / 2)) {
-        source_col_pos < dest_col_pos ? world.recv(neighbors["left"], 0, input_data)
-                                      : world.recv(neighbors["right"], 0, input_data);
+      if (abs(dest_col_pos - source_col_pos) > (middle_col)) {  // через края
+        if (source_col_pos < dest_col_pos) {
+          std::cout << "wait from right1" << std::endl;
+          world.recv(neighbors["right"], 0, input_data);
+        } else {
+          std::cout << "wait from left1" << std::endl;
+          world.recv(neighbors["left"], 0, input_data);
+        }
 
-      } else {
-        source_col_pos < dest_col_pos ? world.recv(neighbors["right"], 0, input_data)
-                                      : world.recv(neighbors["left"], 0, input_data);
+      } else {  // напрямую
+        if (source_col_pos < dest_col_pos) {
+          std::cout << "wait from left2" << std::endl;
+          world.recv(neighbors["left"], 0, input_data);
+        } else {
+          std::cout << "wait from right2" << std::endl;
+          world.recv(neighbors["right"], 0, input_data);
+        }
       }
     }
     std::cout << "Answer: " << input_data.size() << std::endl;
     return;
-  }
-  //(rows+1)/2+1
-  //(rows-1)/2+1
-  else if (current_rank != source_rank) {  // когда текущий не начальный но и не конечный
-    int delta_row, delta_col;
-    delta_row = dest_row_pos - current_row_pos;
-    delta_col = dest_col_pos - current_col_pos;
-    if (delta_row != 0) {   // сначала до нужного ряда дойти
+  } else if (current_rank == source_rank) {  // когда текущий равен начальному
+    /*int delta_row, delta_col;
+    delta_row = dest_row_pos - source_row_pos;
+    delta_col = dest_col_pos - source_col_pos;*/
+    if (delta_row != 0) {
+      if (delta_row < 0) {
+        if (delta_row <= middle_row) {
+          std::cout << "to up1" << std::endl;
+          world.send(neighbors["up"], 0, input_data);
+        } else {
+          std::cout << "to down1" << std::endl;
+          world.send(neighbors["down"], 0, input_data);
+        }
+      } else {
+        if (delta_row <= middle_row) {
+          std::cout << "to down2" << std::endl;
+          world.send(neighbors["down"], 0, input_data);
+        } else {
+          std::cout << "to up2" << std::endl;
+          world.send(neighbors["up"], 0, input_data);
+        }
+      }
+    } else {
+      if (delta_col < 0) {
+        if (delta_col <= middle_col) {
+          std::cout << "to left1" << std::endl;
+          world.send(neighbors["left"], 0, input_data);
+        } else {
+          std::cout << "to right1" << std::endl;
+          world.send(neighbors["right"], 0, input_data);
+        }
+      } else {
+        if (delta_col <= middle_col) {
+          std::cout << "to right2" << std::endl;
+          world.send(neighbors["right"], 0, input_data);
+        } else {
+          std::cout << "to left2" << std::endl;
+          world.send(neighbors["left"], 0, input_data);
+        }
+      }
+    }
+  } else if (current_rank != source_rank) {  // когда текущий не начальный но и не конченый
+    if (delta_row != 0) {                    // сначала до нужного ряда дойти
+
       if (delta_row < 0) {  // цель выше текущего положения
-        if ((abs(delta_row) < (rows / 2)) && (current_row_pos > dest_row_pos) &&
-            (current_row_pos < source_row_pos)) {  // напрямую
+        if ((abs(delta_row) < (middle_row)) && (current_row_pos >= dest_row_pos) &&
+            (current_row_pos <= source_row_pos)) {  // напрямую
           world.recv(neighbors["down"], 0, copy);
           world.send(neighbors["up"], 0, copy);
-        } else if ((abs(delta_row) > (rows / 2)) && (current_row_pos < dest_row_pos) &&
-                   (current_row_pos > source_row_pos)) {  // в обход через края
+        } else if ((abs(delta_row) >= (middle_row)) && (current_row_pos <= dest_row_pos) &&
+                   (current_row_pos >= source_row_pos)) {  // в обход через края
           world.recv(neighbors["up"], 0, copy);
           world.send(neighbors["down"], 0, copy);
         }
       } else {  // цель ниже текущего положения
-        if ((abs(delta_row) < (rows / 2)) && (current_row_pos > source_row_pos) &&
-            (current_row_pos < dest_row_pos)) {  // напрямую
+        if ((abs(delta_row) < (middle_row)) && (current_row_pos >= source_row_pos) &&
+            (current_row_pos <= dest_row_pos)) {  // напрямую
           world.recv(neighbors["up"], 0, copy);
           world.send(neighbors["down"], 0, copy);
-        } else if ((abs(delta_row) > (rows / 2)) && (current_row_pos < source_row_pos) &&
-                   (current_row_pos > dest_row_pos)) {  // в обход через края
+        } else if ((abs(delta_row) >= (middle_row)) && (current_row_pos <= source_row_pos) &&
+                   (current_row_pos >= dest_row_pos)) {  // в обход через края
           world.recv(neighbors["down"], 0, copy);
           world.send(neighbors["up"], 0, copy);
         }
       }
-
-    } else if (delta_col != 0) {  // теперь до нужной колонки идём
+    } else if (delta_col != 0) {  // теперь до нужной колонки идём(if просто для понятности с чем теперь работаем, сюда
+                                  // и так не попадёт delta_col=0)
       if (delta_col < 0) {        // цель левее текущего положения
-        if ((abs(delta_col) < (cols / 2)) && (current_col_pos > dest_col_pos) && (current_col_pos < source_col_pos)) {
-          world.recv(neighbors["right"], 0, copy);
+        if ((abs(delta_col) <= (middle_col)) &&
+            ((current_col_pos >= dest_col_pos) || (current_col_pos <= source_col_pos))) {
+          if (current_col_pos == source_col_pos) {
+            if (current_row_pos <= middle_row) {
+              world.recv(neighbors["up"], 0, copy);
+            } else {
+              world.recv(neighbors["down"], 0, copy);
+            }
+          } else {
+            world.recv(neighbors["right"], 0, copy);
+          }
           world.send(neighbors["left"], 0, copy);
-        } else if ((abs(delta_col) > (cols / 2)) && (current_col_pos < dest_col_pos) &&
-                   (current_col_pos > source_col_pos)) {
-          world.recv(neighbors["left"], 0, copy);
+        } else if ((abs(delta_col) > (middle_col)) &&
+                   ((current_col_pos <= dest_col_pos) || (current_col_pos >= source_col_pos))) {
+          if (current_col_pos == source_col_pos) {
+            if (current_row_pos <= middle_row) {
+              world.recv(neighbors["up"], 0, copy);
+            } else {
+              world.recv(neighbors["down"], 0, copy);
+            }
+          } else {
+            world.recv(neighbors["left"], 0, copy);
+          }
           world.send(neighbors["right"], 0, copy);
+        } else {
+          std::cout << world.rank() << " is outs" << std::endl;
+          return;
         }
       } else {  // цель правее текущего положения
-        if ((abs(delta_col) < (cols / 2)) && (current_col_pos < dest_col_pos) && (current_col_pos > source_col_pos)) {
-          world.recv(neighbors["left"], 0, copy);
+        if ((abs(delta_col) <= (middle_col)) &&
+            ((current_col_pos <= dest_col_pos) || (current_col_pos >= source_col_pos))) {
+          if (current_col_pos == source_col_pos) {  // если в той же колонке с источником то надо от него принять
+                                                    // сначала
+            if (current_row_pos <= middle_row) {
+              world.recv(neighbors["up"], 0, copy);
+            } else {
+              world.recv(neighbors["down"], 0, copy);
+            }
+          } else {
+            world.recv(neighbors["left"], 0, copy);
+          }
           world.send(neighbors["right"], 0, copy);
-        } else if ((abs(delta_col) < (cols / 2)) && (current_col_pos > dest_col_pos) &&
-                   (current_col_pos < source_col_pos)) {
-          world.recv(neighbors["right"], 0, copy);
+        } else if ((abs(delta_col) > (middle_col)) &&
+                   ((current_col_pos <= dest_col_pos) || (current_col_pos >= source_col_pos))) {
+          if (current_col_pos == source_col_pos) {
+            if (current_row_pos <= middle_row) {
+              world.recv(neighbors["up"], 0, copy);
+            } else {
+              world.recv(neighbors["down"], 0, copy);
+            }
+          } else {
+            world.recv(neighbors["right"], 0, copy);
+          }
           world.send(neighbors["left"], 0, copy);
+        } else {
+          std::cout << world.rank() << " is outs" << std::endl;
+          return;
         }
       }
-    }
-  } else {  // когда текущий равен начальному
-    if (current_row_pos < dest_row_pos) {
-      std::cout << "eban" << std::endl;
-      world.send(neighbors["down"], 0, input_data);
-    } else if (current_row_pos > dest_row_pos) {
-      std::cout << "ebun" << std::endl;
-      world.send(neighbors["up"], 0, input_data);
     } else {
-      std::cout << "eben" << std::endl;
-      world.send(neighbors["right"], 0, input_data);
+      std::cout << world.rank() << " is outs" << std::endl;
+      return;
     }
   }
+
   return;
 }
 void myBroadcast(boost::mpi::communicator& world, std::map<std::string, int> neighbors, int rows, int cols,
@@ -177,7 +334,7 @@ void myBroadcast(boost::mpi::communicator& world, std::map<std::string, int> nei
     int sizeinput = input_data.size();
     // std::cout << "sizeinput " << sizeinput << std::endl;
     int limit = 10000;
-    delta = sizeinput < limit ? 1 : (std::ceil(sizeinput / limit) + 1);
+    delta = sizeinput < limit ? 1 : (sizeinput % limit == 0 ? (sizeinput / limit) : (std::ceil(sizeinput / limit) + 1));
     for (int proc = 1; proc < world.size(); proc++) {
       world.send(proc, 0, delta);
     }
@@ -401,8 +558,8 @@ bool tsatsyn_a_topology_torus_grid_mpi::TestMPITaskParallel::pre_processing() {
   neighbors["right"] = (col_pos == cols - 1) ? toGetNeighbor(row_pos, 0) : toGetNeighbor(row_pos, col_pos + 1);
   neighbors["up"] = (row_pos == 0) ? toGetNeighbor(rows - 1, col_pos) : toGetNeighbor(row_pos - 1, col_pos);
 
-  // myBroadcast(world,neighbors, rows, cols, is_main_magistralle, col_pos, row_pos, input_data);
-  mySend(world, 0, world.rank(), 6, cols, rows, neighbors, input_data);
+  myBroadcast(world, neighbors, rows, cols, is_main_magistralle, col_pos, row_pos, input_data);
+  mySend(world, 0, world.rank(), world.size() - 1, cols, rows, neighbors, input_data);
   /*for (const auto& neighbor : neighbors) {
     std::cout << "Neighbors of " << world.rank() << ": " << neighbor.first << " , " << neighbor.second << std::endl;
     world.barrier();
