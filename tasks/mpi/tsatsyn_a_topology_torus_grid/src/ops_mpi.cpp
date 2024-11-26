@@ -150,51 +150,50 @@ void mySend(boost::mpi::communicator& world, int source_rank, int current_rank, 
   std::vector<int> copy;
   if (source_rank == dest_rank || source_rank < 0 || dest_rank > world.size()) {  // рефлексивность
     std::cout << "EXIT:REFLEX" << std::endl;
+    return;
   } else if (current_rank == dest_rank) {  // откуда придёт вызов для последнего
     if (source_col_pos == dest_col_pos) {  // если мы в одной колонке с нужным процессом сразу же
       if (abs(dest_row_pos - source_row_pos) > (middle_row)) {  // через края
         if (source_row_pos < dest_row_pos) {
           std::cout << "wait from down1" << std::endl;
-          world.recv(neighbors["down"], 0, input_data);
+          world.recv(neighbors["down"], 0, copy);
         } else {
           std::cout << "wait from up1" << std::endl;
-          world.recv(neighbors["up"], 0, input_data);
+          world.recv(neighbors["up"], 0, copy);
         }
       } else {  // напрямую
         if (source_row_pos < dest_row_pos) {
           std::cout << "wait from up2" << std::endl;
-          world.recv(neighbors["up"], 0, input_data);
+          world.recv(neighbors["up"], 0, copy);
         } else {
           std::cout << "wait from down2" << std::endl;
-          world.recv(neighbors["down"], 0, input_data);
+          world.recv(neighbors["down"], 0, copy);
         }
       }
     } else {  // если не в одной колонке то тоже самое но для колонок
       if (abs(dest_col_pos - source_col_pos) > (middle_col)) {  // через края
         if (source_col_pos < dest_col_pos) {
           std::cout << "wait from right1" << std::endl;
-          world.recv(neighbors["right"], 0, input_data);
+          world.recv(neighbors["right"], 0, copy);
         } else {
           std::cout << "wait from left1" << std::endl;
-          world.recv(neighbors["left"], 0, input_data);
+          world.recv(neighbors["left"], 0, copy);
         }
 
       } else {  // напрямую
         if (source_col_pos < dest_col_pos) {
           std::cout << "wait from left2" << std::endl;
-          world.recv(neighbors["left"], 0, input_data);
+          world.recv(neighbors["left"], 0, copy);
         } else {
           std::cout << "wait from right2" << std::endl;
-          world.recv(neighbors["right"], 0, input_data);
+          world.recv(neighbors["right"], 0, copy);
         }
       }
     }
+    input_data.insert(input_data.end(), copy.begin(), copy.end());
     std::cout << "Answer: " << input_data.size() << std::endl;
     return;
   } else if (current_rank == source_rank) {  // когда текущий равен начальному
-    /*int delta_row, delta_col;
-    delta_row = dest_row_pos - source_row_pos;
-    delta_col = dest_col_pos - source_col_pos;*/
     if (delta_row != 0) {
       if (delta_row < 0) {
         if (delta_row <= middle_row) {
@@ -558,7 +557,7 @@ bool tsatsyn_a_topology_torus_grid_mpi::TestMPITaskParallel::pre_processing() {
   neighbors["right"] = (col_pos == cols - 1) ? toGetNeighbor(row_pos, 0) : toGetNeighbor(row_pos, col_pos + 1);
   neighbors["up"] = (row_pos == 0) ? toGetNeighbor(rows - 1, col_pos) : toGetNeighbor(row_pos - 1, col_pos);
 
-  myBroadcast(world, neighbors, rows, cols, is_main_magistralle, col_pos, row_pos, input_data);
+  // myBroadcast(world, neighbors, rows, cols, is_main_magistralle, col_pos, row_pos, input_data);
   mySend(world, 0, world.rank(), world.size() - 1, cols, rows, neighbors, input_data);
   /*for (const auto& neighbor : neighbors) {
     std::cout << "Neighbors of " << world.rank() << ": " << neighbor.first << " , " << neighbor.second << std::endl;
