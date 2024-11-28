@@ -16,7 +16,6 @@
 namespace tsatsyn_a_topology_torus_grid_mpi {
 
 std::vector<int> getRandomVector(int sz);
-
 class TestMPITaskSequential : public ppc::core::Task {
  public:
   explicit TestMPITaskSequential(std::shared_ptr<ppc::core::TaskData> taskData_) : Task(std::move(taskData_)) {}
@@ -43,7 +42,6 @@ class TestMPITaskParallel : public ppc::core::Task {
   int* vec;
   int res{};
   boost::mpi::communicator world;
-  std::vector<std::map<std::string, int>> neighborhood;
-};
+ };
 
 }  // namespace tsatsyn_a_topology_torus_grid_mpi
