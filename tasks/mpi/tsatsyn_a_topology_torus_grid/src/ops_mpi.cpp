@@ -62,14 +62,12 @@ void mySend(boost::mpi::communicator& world, int source_rank, int dest_rank, int
             std::map<std::string, int> neighbors, int& inputs) {
   int current_rank = world.rank();
   int source_row_pos, current_row_pos, dest_row_pos, source_col_pos, current_col_pos, dest_col_pos;
-  bool is_main_magistrelle;
   source_row_pos = source_rank / cols;
   current_row_pos = current_rank / cols;
   dest_row_pos = dest_rank / cols;
   source_col_pos = source_rank % cols;
   current_col_pos = current_rank % cols;
   dest_col_pos = dest_rank % cols;
-  is_main_magistrelle = current_col_pos == source_col_pos;
 
   /*if (world.rank() == 0) {
     std::cout << "source_row_pos: " << source_row_pos << std::endl
@@ -341,14 +339,12 @@ void mySend(boost::mpi::communicator& world, int source_rank, int dest_rank, int
             std::map<std::string, int> neighbors, std::vector<int>& inputs, std::vector<int> inputs_for_send) {
   int current_rank = world.rank();
   int source_row_pos, current_row_pos, dest_row_pos, source_col_pos, current_col_pos, dest_col_pos;
-  bool is_main_magistrelle;
   source_row_pos = source_rank / cols;
   current_row_pos = current_rank / cols;
   dest_row_pos = dest_rank / cols;
   source_col_pos = source_rank % cols;
   current_col_pos = current_rank % cols;
   dest_col_pos = dest_rank % cols;
-  is_main_magistrelle = current_col_pos == source_col_pos;
 
   // отключение не нужных рядов/колонок
   if (current_col_pos != source_col_pos && current_row_pos != dest_row_pos) {
@@ -504,7 +500,8 @@ void mySend(boost::mpi::communicator& world, int source_rank, int dest_rank, int
     // delta);
     for (int i = 0; i < delta; i++) {
       copy.clear();
-      int endOfCycle = inputs_for_send.size() - limit * (i) >= limit ? limit * (i + 1) : inputs_for_send.size();
+      int size = inputs_for_send.size();
+      int endOfCycle = size - limit * (i) >= limit ? limit * (i + 1) : size;
       // std::cout << "endofCycle " << endOfCycle << std::endl;
       // std::cout << "i*limit " << i*limit << std::endl;
       for (int j = i * limit; j < endOfCycle; j++) copy.push_back(inputs_for_send[j]);
@@ -654,7 +651,7 @@ void myBroadcast(boost::mpi::communicator& world, std::map<std::string, int> nei
 
     for (int i = 0; i < delta; i++) {
       std::vector<int> local_input_data;
-      int endOfCycle = inputs.size() - limit * (i) >= limit ? limit * (i + 1) : inputs.size();
+      int endOfCycle = sizeinput - limit * (i) >= limit ? limit * (i + 1) : sizeinput;
       // std::cout << "limit*delta " << limit * i << std::endl;
       // std::cout << "endofCycle " << endOfCycle << std::endl;
 
@@ -1031,9 +1028,6 @@ bool tsatsyn_a_topology_torus_grid_mpi::TestMPITaskParallel::pre_processing() {
     world.barrier();
   }*/
   myBroadcast(world, neighbors, rows, cols, is_main_magistralle, col_pos, row_pos, input_data);
-  int sizeinput, limit;
-  sizeinput = input_data.size();
-  limit = 10000;
   // delta = sizeinput < limit ? 1 : (sizeinput % limit == 0 ? (sizeinput / limit) : (std::ceil(sizeinput / limit) +
   // 1)); for (int j = 1; j < world.size(); j++) {
   //   mySend(world, 0, j, cols, rows, neighbors, delta);
