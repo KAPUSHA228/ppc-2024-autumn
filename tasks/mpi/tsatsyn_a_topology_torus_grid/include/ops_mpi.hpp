@@ -38,10 +38,10 @@ class TestMPITaskParallel : public ppc::core::Task {
   bool post_processing() override;
 
  private:
-  std::vector<int> input_data, local_input_data;
-  int* vec;
+  std::vector<int> input_data;
+  // int delta;
   int res{};
   boost::mpi::communicator world;
- };
+};
 
 }  // namespace tsatsyn_a_topology_torus_grid_mpi
